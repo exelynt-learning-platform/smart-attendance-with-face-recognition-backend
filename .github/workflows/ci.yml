@@ -1,0 +1,38 @@
+name: ci-workflow
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: No code yet
+        if: hashFiles('gradlew') == ''
+        run: echo "No Gradle wrapper yet, nothing to build or test."
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        if: hashFiles('gradlew') != ''
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        if: hashFiles('gradlew') != ''
+      # Needs the jacoco plugin with the XML report on in build.gradle.
+      - if: hashFiles('gradlew') != ''
+        run: ./gradlew build jacocoTestReport
+      - name: Coverage of the new lines is at least 80%
+        if: github.event_name == 'pull_request' && hashFiles('gradlew') != ''
+        run: |
+          pip install diff-cover==9.2.0
+          diff-cover build/reports/jacoco/test/jacocoTestReport.xml --compare-branch=origin/${{ github.base_ref }} --fail-under=80
